@@ -2,7 +2,9 @@ package net.engineeringdigest.journalApp.controller;
 
 import lombok.extern.slf4j.Slf4j;
 import net.engineeringdigest.journalApp.entity.JournalEntity;
+import net.engineeringdigest.journalApp.entity.UserEntity;
 import net.engineeringdigest.journalApp.service.JournalService;
+import net.engineeringdigest.journalApp.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,11 +23,26 @@ public class JournalController {
     @Autowired
     private JournalService journalService;
 
+    @Autowired
+    private UserService userService;
+
     private List<JournalEntity> journalEntities = new ArrayList<>();
 
     @GetMapping
     public ResponseEntity<List<JournalEntity>> journalEntries() {
         return new ResponseEntity<>(journalService.getAllJournalEntries(), HttpStatus.OK);
+    }
+
+    @GetMapping("/user/{userName}")
+    public ResponseEntity<List<JournalEntity>> journalEntriesByUserName(@PathVariable String userName) {
+        UserEntity user = userService.findByUserName(userName);
+        List<Integer> journalEntriesIDs = user.getJournalEntries();
+        if(journalEntriesIDs != null && journalEntriesIDs.size() > 0) {
+            List<JournalEntity> journalEntities = journalService.getJournalEntriesByIDs(journalEntriesIDs);
+            return new ResponseEntity<>(journalEntities, HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+        }
     }
 
     @GetMapping("/search")
@@ -52,15 +69,16 @@ public class JournalController {
         return new ResponseEntity<>(result, (!result.isEmpty()) ? HttpStatus.OK : HttpStatus.NOT_FOUND);
     }
 
-    @PostMapping
-    public ResponseEntity<JournalEntity> addJournal(@RequestBody JournalEntity journalEntity) {
-        journalService.save(journalEntity);
+    @PostMapping("/{userName}")
+    public ResponseEntity<JournalEntity> addJournal(@RequestBody JournalEntity journalEntity, @PathVariable String userName) {
+        int insertedId = journalService.save(journalEntity, userName);
+        journalEntity.setId(insertedId);
         return new ResponseEntity<>(journalEntity, HttpStatus.OK);
     }
 
-    @PostMapping("/save-all-journals")
-    public ResponseEntity<?> addAllJournal(@RequestBody List<JournalEntity> journalEntities) {
-        return new ResponseEntity<>(journalService.saveAll(journalEntities), HttpStatus.OK);
+    @PostMapping("/save-all-journals/{userName}")
+    public ResponseEntity<?> addAllJournal(@RequestBody List<JournalEntity> journalEntities, @PathVariable String userName) {
+        return new ResponseEntity<>(journalService.saveAll(journalEntities, userName), HttpStatus.OK);
     }
 
     @PutMapping

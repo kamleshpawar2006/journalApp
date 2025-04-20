@@ -6,8 +6,11 @@ import org.springframework.jdbc.core.namedparam.BeanPropertySqlParameterSource;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,11 +41,26 @@ public class JournalRepository {
         );
     }
 
+
+
     public List<JournalEntity> getJournalEntity(int id) {
         String sql = "SELECT id, title, content FROM journal_entries WHERE id = :id";
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("id", id);
+
+        return namedParameterJdbcTemplate.query(
+                sql,
+                params,
+                new JournalRowMapper()
+        );
+    }
+
+    public List<JournalEntity> getJournalEntriesByIDs(List<Integer> journalEntriesIDs) {
+        String sql = "SELECT id, title, content FROM journal_entries WHERE id in (:journalEntriesIDs)";
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("journalEntriesIDs", journalEntriesIDs);
 
         return namedParameterJdbcTemplate.query(
                 sql,
@@ -67,7 +85,7 @@ public class JournalRepository {
 
     }
 
-    public void save(JournalEntity journal) {
+    public int save(JournalEntity journal) {
 
           // Normal JdbcTemplate way:
 //        String sql = "INSERT INTO journal_entries (title, content) VALUES (?, ?)";
@@ -83,30 +101,51 @@ public class JournalRepository {
         // NamedParameterJdbcTemplate + BeanPropertySqlParameterSource way:
         String sql = "INSERT INTO journal_entries (title, content) VALUES (:title, :content)";
         BeanPropertySqlParameterSource paramSource = new BeanPropertySqlParameterSource(journal);
-        namedParameterJdbcTemplate.update(sql, paramSource);
+
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+
+        namedParameterJdbcTemplate.update(sql, paramSource, keyHolder, new String[]{"id"});
+
+        return keyHolder.getKey().intValue();
     }
 
-    public int[] saveAll(List<JournalEntity> journalList) {
+    public List<Integer> saveAll(List<JournalEntity> journalList) {
+
         if (journalList == null || journalList.isEmpty()) {
             return null;
         }
 
-        String sql = "INSERT INTO journal_entries (title, content) VALUES (:title, :content)";
-
-        SqlParameterSource[] batchParams = journalList
-                .stream()
-                .map(BeanPropertySqlParameterSource::new)
-                .toArray(SqlParameterSource[]::new);
-
-        // In simple terms - below is the easier implementation of above code
+//        String sql = "INSERT INTO journal_entries (title, content) VALUES (:title, :content)";
+//
+//        SqlParameterSource[] batchParams = journalList
+//                .stream()
+//                .map(BeanPropertySqlParameterSource::new)
+//                .toArray(SqlParameterSource[]::new);
+//
+//        /*  In simple terms - below is the easier implementation of above code
 //        SqlParameterSource[] batchParams = new SqlParameterSource[journalList.size()];
 //
 //        for (int i = 0; i < journalList.size(); i++) {
 //            batchParams[i] = new BeanPropertySqlParameterSource(journalList.get(i));
 //        }
+//         */
+//       below is not inserted IDs
+//       int insertedRecords[] = namedParameterJdbcTemplate.batchUpdate(sql, batchParams);
+//       return insertedRecords;
 
-       int insertedRecords[] = namedParameterJdbcTemplate.batchUpdate(sql, batchParams);
-       return insertedRecords;
+        List<Integer> insertedIds = new ArrayList<>();
+        String sql = "INSERT INTO journal_entries (title, content) VALUES (:title, :content)";
+        for (JournalEntity journal: journalList) {
+            BeanPropertySqlParameterSource paramSource = new BeanPropertySqlParameterSource(journal);
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            namedParameterJdbcTemplate.update(sql, paramSource, keyHolder, new String[]{"id"});
+            Number generatedId = keyHolder.getKey();
+            if(generatedId != null) {
+                insertedIds.add(generatedId.intValue());
+            }
+        }
+
+        return insertedIds;
     }
 
     public int[] updateAll(List<JournalEntity> journalList) throws IllegalArgumentException {
