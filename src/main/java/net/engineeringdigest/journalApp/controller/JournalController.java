@@ -1,0 +1,103 @@
+package net.engineeringdigest.journalApp.controller;
+
+import lombok.extern.slf4j.Slf4j;
+import net.engineeringdigest.journalApp.entity.JournalEntity;
+import net.engineeringdigest.journalApp.service.JournalService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Slf4j
+@RestController
+@RequestMapping("/journal")
+public class JournalController {
+
+    @Autowired
+    private JournalService journalService;
+
+    private List<JournalEntity> journalEntities = new ArrayList<>();
+
+    @GetMapping
+    public ResponseEntity<List<JournalEntity>> journalEntries() {
+        return new ResponseEntity<>(journalService.getAllJournalEntries(), HttpStatus.OK);
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> journalEntriesByCriteria(@RequestParam String criteria, @RequestParam String criteriaValue) {
+        List<JournalEntity> result;
+        switch (criteria)  {
+            case "id" : {
+                try {
+                    int journalId = Integer.parseInt(criteriaValue);
+                    result = journalService.getJournalEntity(journalId);
+                } catch (NumberFormatException ex) {
+                    return new ResponseEntity<>("Invalid search value", HttpStatus.BAD_REQUEST);
+                }
+                break;
+            }
+            case "title" : {
+                result = journalService.getJournalEntity(criteriaValue);
+                break;
+            }
+            default: {
+                return new ResponseEntity<>("Invalid search criteria", HttpStatus.BAD_REQUEST);
+            }
+        }
+        return new ResponseEntity<>(result, (!result.isEmpty()) ? HttpStatus.OK : HttpStatus.NOT_FOUND);
+    }
+
+    @PostMapping
+    public ResponseEntity<JournalEntity> addJournal(@RequestBody JournalEntity journalEntity) {
+        journalService.save(journalEntity);
+        return new ResponseEntity<>(journalEntity, HttpStatus.OK);
+    }
+
+    @PostMapping("/save-all-journals")
+    public ResponseEntity<?> addAllJournal(@RequestBody List<JournalEntity> journalEntities) {
+        return new ResponseEntity<>(journalService.saveAll(journalEntities), HttpStatus.OK);
+    }
+
+    @PutMapping
+    public ResponseEntity<?> updateJournal(@RequestBody List<JournalEntity> journalEntityList) {
+        if(journalEntityList.size() > 0) {
+            try {
+                return new ResponseEntity<>(journalService.updateAll(journalEntityList), HttpStatus.OK);
+            } catch (IllegalArgumentException ex) {
+                log.error(String.valueOf(ex));
+                return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            } catch (Exception ex) {
+                log.error(String.valueOf(ex));
+                return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            }
+        } else {
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @DeleteMapping("/{journalId}")
+    public ResponseEntity<Boolean> deleteJournal(@PathVariable int journalId) {
+        //boolean removed = journalEntities.removeIf(e -> e.getId() == journalId);
+        // return removed;
+        Iterator<JournalEntity> iteratorJournalEntities = journalEntities.iterator();
+        Boolean removed = false;
+        while (iteratorJournalEntities.hasNext()) {
+            JournalEntity journal = iteratorJournalEntities.next();
+            if (journal.getId() == journalId) {
+                removed = true;
+                iteratorJournalEntities.remove();
+            }
+        }
+        if(removed) {
+            return new ResponseEntity<>(removed, HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+    }
+
+}
