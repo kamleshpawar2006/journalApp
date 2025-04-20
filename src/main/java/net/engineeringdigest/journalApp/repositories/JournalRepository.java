@@ -135,4 +135,16 @@ public class JournalRepository {
 
         return namedParameterJdbcTemplate.batchUpdate(sql, batchParams);
     }
+
+    public int deleteJournal(Integer id) {
+        String sql = "DELETE FROM journal_entries WHERE id = :id";
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("id", id);
+
+        return namedParameterJdbcTemplate.update(
+            sql,
+            params
+        );
+    }
 }

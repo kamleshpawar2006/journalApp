@@ -37,4 +37,8 @@ public class JournalService {
     public int[] updateAll(List<JournalEntity> journalEntities) throws IllegalArgumentException {
         return journalRepository.updateAll(journalEntities);
     }
+
+    public int deleteJournal(Integer id) {
+        return journalRepository.deleteJournal(id);
+    }
 }

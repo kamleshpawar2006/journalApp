@@ -80,21 +80,10 @@ public class JournalController {
         }
     }
 
-    @DeleteMapping("/{journalId}")
-    public ResponseEntity<Boolean> deleteJournal(@PathVariable int journalId) {
-        //boolean removed = journalEntities.removeIf(e -> e.getId() == journalId);
-        // return removed;
-        Iterator<JournalEntity> iteratorJournalEntities = journalEntities.iterator();
-        Boolean removed = false;
-        while (iteratorJournalEntities.hasNext()) {
-            JournalEntity journal = iteratorJournalEntities.next();
-            if (journal.getId() == journalId) {
-                removed = true;
-                iteratorJournalEntities.remove();
-            }
-        }
-        if(removed) {
-            return new ResponseEntity<>(removed, HttpStatus.OK);
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Integer> deleteJournal(@PathVariable Integer id) {
+        if(id != null) {
+            return new ResponseEntity<>(journalService.deleteJournal(id), HttpStatus.OK);
         } else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
