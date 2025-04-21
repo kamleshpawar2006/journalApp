@@ -6,6 +6,8 @@ import net.engineeringdigest.journalApp.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -39,16 +41,12 @@ public class UserController {
         }
     }
 
-    @PostMapping
-    public ResponseEntity<UserEntity> addUser(@RequestBody UserEntity user) {
-        return new ResponseEntity(userService.saveUser(user), HttpStatus.OK);
-    }
-
     @PutMapping
-    public ResponseEntity<HttpStatus> updateUser(@RequestBody UserEntity userFromRequest) {
-        UserEntity userInDB = userService.findByUserName(userFromRequest.getUserName());
+    public ResponseEntity<HttpStatus> updateUser(@RequestBody UserEntity user) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserEntity userInDB = userService.findByUserName(authentication.getName());
         if(!userInDB.equals(null)) {
-            userInDB.setPassword(userFromRequest.getPassword());
+            userInDB.setPassword(user.getPassword());
             userService.saveUser(userInDB);
             return new ResponseEntity<>(HttpStatus.OK);
         } else {

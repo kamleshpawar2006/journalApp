@@ -3,6 +3,7 @@ package net.engineeringdigest.journalApp.controller;
 import lombok.extern.slf4j.Slf4j;
 import net.engineeringdigest.journalApp.entity.JournalEntity;
 import net.engineeringdigest.journalApp.entity.UserEntity;
+import net.engineeringdigest.journalApp.exception.ResourceNotFoundException;
 import net.engineeringdigest.journalApp.service.JournalService;
 import net.engineeringdigest.journalApp.service.UserService;
 import org.slf4j.Logger;
@@ -10,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -33,9 +36,10 @@ public class JournalController {
         return new ResponseEntity<>(journalService.getAllJournalEntries(), HttpStatus.OK);
     }
 
-    @GetMapping("/user/{userName}")
-    public ResponseEntity<List<JournalEntity>> journalEntriesByUserName(@PathVariable String userName) {
-        UserEntity user = userService.findByUserName(userName);
+    @GetMapping("/user")
+    public ResponseEntity<List<JournalEntity>> journalEntriesByUserName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserEntity user = userService.findByUserName(authentication.getName());
         List<Integer> journalEntriesIDs = user.getJournalEntries();
         if(journalEntriesIDs != null && journalEntriesIDs.size() > 0) {
             List<JournalEntity> journalEntities = journalService.getJournalEntriesByIDs(journalEntriesIDs);
@@ -48,11 +52,20 @@ public class JournalController {
     @GetMapping("/search")
     public ResponseEntity<?> journalEntriesByCriteria(@RequestParam String criteria, @RequestParam String criteriaValue) {
         List<JournalEntity> result;
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserEntity user = userService.findByUserName(authentication.getName());
+        List<Integer> journalEntriesIDs = user.getJournalEntries();
+
         switch (criteria)  {
             case "id" : {
                 try {
-                    int journalId = Integer.parseInt(criteriaValue);
-                    result = journalService.getJournalEntity(journalId);
+                    Integer journalId = Integer.parseInt(criteriaValue);
+                    if(journalEntriesIDs.contains(journalId)) {
+                        result = journalService.getJournalEntity(journalId);
+                    } else {
+                        return new ResponseEntity<>("Unauthorised Journal Entry", HttpStatus.BAD_REQUEST);
+                    }
                 } catch (NumberFormatException ex) {
                     return new ResponseEntity<>("Invalid search value", HttpStatus.BAD_REQUEST);
                 }
@@ -69,23 +82,45 @@ public class JournalController {
         return new ResponseEntity<>(result, (!result.isEmpty()) ? HttpStatus.OK : HttpStatus.NOT_FOUND);
     }
 
-    @PostMapping("/{userName}")
-    public ResponseEntity<JournalEntity> addJournal(@RequestBody JournalEntity journalEntity, @PathVariable String userName) {
-        int insertedId = journalService.save(journalEntity, userName);
-        journalEntity.setId(insertedId);
-        return new ResponseEntity<>(journalEntity, HttpStatus.OK);
+    @PostMapping
+    public ResponseEntity<?> addJournal(@RequestBody JournalEntity journalEntity) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserEntity user = userService.findByUserName(authentication.getName());
+        Integer insertedId;
+        try {
+            insertedId = journalService.save(journalEntity, user.getUserName());
+            journalEntity.setId(insertedId);
+            return new ResponseEntity<>(journalEntity, HttpStatus.OK);
+        } catch (ResourceNotFoundException ex) {
+            return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+        }
     }
 
-    @PostMapping("/save-all-journals/{userName}")
-    public ResponseEntity<?> addAllJournal(@RequestBody List<JournalEntity> journalEntities, @PathVariable String userName) {
-        return new ResponseEntity<>(journalService.saveAll(journalEntities, userName), HttpStatus.OK);
+    @PostMapping("/save-all-journals")
+    public ResponseEntity<?> addAllJournal(@RequestBody List<JournalEntity> journalEntities) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return new ResponseEntity<>(journalService.saveAll(journalEntities, authentication.getName()), HttpStatus.OK);
     }
 
     @PutMapping
     public ResponseEntity<?> updateJournal(@RequestBody List<JournalEntity> journalEntityList) {
-        if(journalEntityList.size() > 0) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserEntity user = userService.findByUserName(authentication.getName());
+        if(authentication.getName() != null && journalEntityList.size() > 0) {
             try {
-                return new ResponseEntity<>(journalService.updateAll(journalEntityList), HttpStatus.OK);
+                List<Integer> journalEntriesIDs = user.getJournalEntries();
+                List<JournalEntity> authenticatedJournalList = journalEntityList.stream().filter(e -> journalEntriesIDs.contains(e.getId())).collect(Collectors.toList());
+                List<JournalEntity> unAuthenticatedJournalList = journalEntityList.stream().filter(e -> !journalEntriesIDs.contains(e.getId())).collect(Collectors.toList());
+                Map<String, List<Integer>> journalIDs = new HashMap<>();
+
+                if(authenticatedJournalList.size() > 0) {
+                    journalIDs.put("Authenticated Journal IDs", authenticatedJournalList.stream().map(e -> e.getId()).collect(Collectors.toList()));
+                    journalService.updateAll(authenticatedJournalList);
+                }
+                if(unAuthenticatedJournalList.size() > 0) {
+                    journalIDs.put("Unauthenticated Journal IDs", unAuthenticatedJournalList.stream().map(e -> e.getId()).collect(Collectors.toList()));
+                }
+                return new ResponseEntity<>(journalIDs, HttpStatus.OK);
             } catch (IllegalArgumentException ex) {
                 log.error(String.valueOf(ex));
                 return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
@@ -99,11 +134,19 @@ public class JournalController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Integer> deleteJournal(@PathVariable Integer id) {
-        if(id != null) {
-            return new ResponseEntity<>(journalService.deleteJournal(id), HttpStatus.OK);
+    public ResponseEntity<?> deleteJournal(@PathVariable Integer id) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        UserEntity user = userService.findByUserName(authentication.getName());
+        List<Integer> journalEntriesIDs = user.getJournalEntries();
+        if(journalEntriesIDs.contains(id)) {
+            try {
+                return new ResponseEntity<>(journalService.deleteJournal(id), HttpStatus.OK);
+            } catch (RuntimeException ex) {
+                log.error(ex.getMessage());
+                return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
+            }
         } else {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>("Journal not found", HttpStatus.NOT_FOUND);
         }
     }
 

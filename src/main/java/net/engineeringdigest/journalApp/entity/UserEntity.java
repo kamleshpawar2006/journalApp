@@ -21,11 +21,14 @@ public class UserEntity {
     @Column(name = "userName", nullable = false, length = 45)
     private String userName;
 
-    @Column(name = "password", nullable = false, length = 45)
+    @Column(name = "password", nullable = false, length = 300)
     private String password;
 
     @Column(name = "journal_entries", length = 300)
     private String journalEntries;
+
+    @Column(name = "roles")
+    private String roles;
 
     // Custom Getter: Convert CSV String to List<Integer>
     public List<Integer> getJournalEntries() {
@@ -45,6 +48,21 @@ public class UserEntity {
             this.journalEntries = journalIds.stream()
                     .map(String::valueOf)
                     .collect(Collectors.joining(","));
+        }
+    }
+
+    public List<String> getRoles() {
+        if (roles == null || roles.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return Arrays.asList(roles.split(","));
+    }
+
+    public void setRoles(String... roleList) {
+        if (roleList == null || roleList.length == 0) {
+            this.roles = null;
+        } else {
+            this.roles = String.join(",", roleList);
         }
     }
 }
