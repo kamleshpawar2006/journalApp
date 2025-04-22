@@ -3,33 +3,49 @@ package net.engineeringdigest.journalApp.utility;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwt;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Component
 public class JwtUtil {
 
-    private final String SECRET_KEY = "DUEk8d_O4pI7n0Duz74Y8xB8LF2UbM5oUINpKh2-7Zg";
+    private final String SECRET_KEY = System.getProperty("jwt.secret");
 
-    public String generateToken(String userName) {
+    public String generateToken(UserDetails userDetails, Integer userId) {
         Map<String, Object> claims = new HashMap<>();
-        return createToken(claims, userName);
+        claims.put("userId", userId);
+        claims.put("roles", userDetails.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList()));
+
+        return createToken(claims, userDetails.getUsername());
     }
 
+//    public String generateToken(String userName) {
+//        Map<String, Object> claims = new HashMap<>();
+//        return createToken(claims, userName);
+//    }
+
     private String createToken(Map<String, Object> claims, String userName) {
+        long expirationMillis = 3600000; // 1 hour
         return Jwts.builder()
                 .claims(claims)
                 .subject(userName)
                 .header().empty().add("type", "JWT")
                 .and()
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 30))
-                .signWith(getSigningKey())
+                .expiration(new Date(System.currentTimeMillis() + expirationMillis))
+                .signWith(Keys.hmacShaKeyFor(SECRET_KEY.getBytes()), SignatureAlgorithm.HS512)
                 .compact();
     }
 
@@ -51,10 +67,20 @@ public class JwtUtil {
 
     private Claims extractAllClaims(String jwt) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .setSigningKey(getSigningKey())
                 .build()
                 .parseSignedClaims(jwt)
                 .getPayload();
+    }
+
+    public List<String> extractRoles(String token) {
+        Claims claims = Jwts.parser()
+                .setSigningKey(SECRET_KEY.getBytes())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+
+        return (List<String>) claims.get("roles");
     }
 
 }
